@@ -42,6 +42,8 @@
     including Airflow and Beam.
 *   Added BulkInferrer component to TFX pipeline, and corresponding offline
     inference taxi pipeline.
+*   Introduced `PipelineConfig` and `BaseComponentConfig` to control the
+    platform specific settings for pipelines and components.
 
 ## Bug fixes and other changes
 *   Bumped test dependency to kfp (Kubeflow Pipelines SDK) to
