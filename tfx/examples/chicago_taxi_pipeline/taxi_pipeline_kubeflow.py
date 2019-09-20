@@ -234,9 +234,8 @@ def _create_pipeline(
           example_gen, statistics_gen, infer_schema, validate_stats, transform,
           trainer, model_analyzer, model_validator, pusher
       ],
-      additional_pipeline_args={
-          'beam_pipeline_args': beam_pipeline_args,
-      },
+      beam_pipeline_args=beam_pipeline_args,
+      additional_pipeline_args={},
       log_root='/var/tmp/tfx/logs',
   )
 
