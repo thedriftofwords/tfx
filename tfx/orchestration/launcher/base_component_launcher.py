@@ -20,7 +20,7 @@ from __future__ import print_function
 import abc
 from six import with_metaclass
 import tensorflow as tf
-from typing import Any, Dict, List, Text
+from typing import Any, Dict, List, Optional, Text
 
 from ml_metadata.proto import metadata_store_pb2
 from tfx import types
@@ -29,17 +29,20 @@ from tfx.components.base import executor_spec
 from tfx.orchestration import data_types
 from tfx.orchestration import metadata
 from tfx.orchestration import publisher
+from tfx.orchestration.config import base_platform_config
 
 
 class BaseComponentLauncher(with_metaclass(abc.ABCMeta, object)):
   """Responsible for launching driver, executor and publisher of component."""
 
-  def __init__(self, component: base_component.BaseComponent,
-               pipeline_info: data_types.PipelineInfo,
-               driver_args: data_types.DriverArgs,
-               metadata_connection_config: metadata_store_pb2.ConnectionConfig,
-               beam_pipeline_args: List[Text],
-               additional_pipeline_args: Dict[Text, Any]):
+  def __init__(
+      self, component: base_component.BaseComponent,
+      pipeline_info: data_types.PipelineInfo,
+      driver_args: data_types.DriverArgs,
+      metadata_connection_config: metadata_store_pb2.ConnectionConfig,
+      beam_pipeline_args: List[Text], additional_pipeline_args: Dict[Text, Any],
+      platform_config: Optional[base_platform_config.BasePlatformConfig]):
+    # pyformat: enable
     """Initialize a BaseComponentLauncher.
 
     Args:
@@ -51,6 +54,8 @@ class BaseComponentLauncher(with_metaclass(abc.ABCMeta, object)):
       metadata_connection_config: ML metadata connection config.
       beam_pipeline_args: Beam pipeline args for beam jobs within executor.
       additional_pipeline_args: Additional pipeline args.
+      platform_config: Optional platform specific config to instrument launcher
+        on how to launch a component.
 
     Raises:
       ValueError: when component_executor_spec is not launchable by the
@@ -73,8 +78,10 @@ class BaseComponentLauncher(with_metaclass(abc.ABCMeta, object)):
     self._beam_pipeline_args = beam_pipeline_args
 
     self._additional_pipeline_args = additional_pipeline_args
+    self._platform_config = platform_config
 
-    if not self.can_launch(self._component_executor_spec):
+    if not self.can_launch(self._component_executor_spec,
+                           self._platform_config):
       raise ValueError(
           'component_executor_spec with type "%s" is not launchable by "%s".' %
           (self._component_executor_spec.__class__.__name__,
@@ -86,8 +93,9 @@ class BaseComponentLauncher(with_metaclass(abc.ABCMeta, object)):
       pipeline_info: data_types.PipelineInfo,
       driver_args: data_types.DriverArgs,
       metadata_connection_config: metadata_store_pb2.ConnectionConfig,
-      beam_pipeline_args: List[Text],
-      additional_pipeline_args: Dict[Text, Any]) -> 'BaseComponentLauncher':
+      beam_pipeline_args: List[Text], additional_pipeline_args: Dict[Text, Any],
+      platform_config: Optional[base_platform_config.BasePlatformConfig]
+  ) -> 'BaseComponentLauncher':
     """Initialize a ComponentLauncher directly from a BaseComponent instance.
 
     This class method is the contract between `TfxRunner` and
@@ -103,6 +111,8 @@ class BaseComponentLauncher(with_metaclass(abc.ABCMeta, object)):
       metadata_connection_config: ML metadata connection config.
       beam_pipeline_args: Beam pipeline args for beam jobs within executor.
       additional_pipeline_args: Additional pipeline args.
+      platform_config: Optional platform specific config to instrument launcher
+        on how to launch a component.
 
     Returns:
       A new instance of component launcher.
@@ -113,13 +123,15 @@ class BaseComponentLauncher(with_metaclass(abc.ABCMeta, object)):
         driver_args=driver_args,
         metadata_connection_config=metadata_connection_config,
         beam_pipeline_args=beam_pipeline_args,
-        additional_pipeline_args=additional_pipeline_args)
+        additional_pipeline_args=additional_pipeline_args,
+        platform_config=platform_config)
 
   @classmethod
   @abc.abstractmethod
-  def can_launch(cls,
-                 component_executor_spec: executor_spec.ExecutorSpec) -> bool:
-    """Checks if the launcher can launch the executor spec."""
+  def can_launch(
+      cls, component_executor_spec: executor_spec.ExecutorSpec,
+      platform_config: base_platform_config.BasePlatformConfig) -> bool:
+    """Checks if the launcher can launch the executor spec with an optional platform config."""
     raise NotImplementedError
 
   def _run_driver(

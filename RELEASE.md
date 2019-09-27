@@ -16,6 +16,8 @@
     A default value can be provided when constructing the TFX pipeline.
 *   Added basic span support in ExampleGen to ingest file based data sources
     that can be updated regularly by upstream.
+*   Introduced `BasePlatfromConfig` as config to pass to launcher.
+    *   Added `DockerPlatformConfig` to configure `DockerComponentLauncher`.
 
 ## Bug fixes and other changes
 *   Bumped test dependency to kfp (Kubeflow Pipelines SDK) to

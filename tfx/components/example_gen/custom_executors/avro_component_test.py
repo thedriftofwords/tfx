@@ -83,7 +83,8 @@ class ExampleGenComponentWithAvroExecutorTest(tf.test.TestCase):
         driver_args=driver_args,
         metadata_connection_config=connection_config,
         beam_pipeline_args=[],
-        additional_pipeline_args={})
+        additional_pipeline_args={},
+        platform_config=None)
     self.assertEqual(
         launcher._component_info.component_type,
         '.'.join([FileBasedExampleGen.__module__,

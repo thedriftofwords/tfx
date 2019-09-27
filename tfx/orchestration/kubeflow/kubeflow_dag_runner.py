@@ -24,12 +24,13 @@ import tarfile
 from kfp import compiler
 from kfp import dsl
 from kfp import gcp
-from typing import Callable, List, Optional, Text
+from typing import Callable, Dict, List, Optional, Text
 import yaml
 
 from tfx import version
 from tfx.orchestration import pipeline as tfx_pipeline
 from tfx.orchestration import tfx_runner
+from tfx.orchestration.config import base_platform_config
 from tfx.orchestration.kubeflow import base_component
 from tfx.orchestration.kubeflow.proto import kubeflow_pb2
 from tfx.orchestration.launcher import in_process_component_launcher
@@ -162,7 +163,9 @@ class KubeflowDagRunner(tfx_runner.TfxRunner):
 
   def __init__(self,
                output_dir: Optional[Text] = None,
-               config: Optional[KubeflowDagRunnerConfig] = None):
+               config: Optional[KubeflowDagRunnerConfig] = None,
+               platform_configs: Dict[
+                   Text, List[base_platform_config.BasePlatformConfig]] = None):
     """Initializes KubeflowDagRunner for compiling a Kubeflow Pipeline.
 
     Args:
@@ -170,8 +173,9 @@ class KubeflowDagRunner(tfx_runner.TfxRunner):
         definition files. Defaults to the current working directory.
       config: An optional KubeflowDagRunnerConfig object to specify runtime
         configuration when running the pipeline under Kubeflow.
+      platform_configs: platform configs to launch components in a pipeline.
     """
-    super(KubeflowDagRunner, self).__init__()
+    super(KubeflowDagRunner, self).__init__(platform_configs)
     self._output_dir = output_dir or os.getcwd()
     self._config = config or KubeflowDagRunnerConfig()
     self._compiler = compiler.Compiler()
@@ -197,16 +201,19 @@ class KubeflowDagRunner(tfx_runner.TfxRunner):
       for upstream_component in component.upstream_nodes:
         depends_on.add(component_to_kfp_op[upstream_component])
 
+      (component_launcher_class,
+       platform_config) = self.find_component_launch_info(component)
+
       kfp_component = base_component.BaseComponent(
           component=component,
-          component_launcher_class=self.find_component_launcher_class(
-              component),
+          component_launcher_class=component_launcher_class,
           depends_on=depends_on,
           pipeline=pipeline,
           pipeline_name=pipeline.pipeline_info.pipeline_name,
           pipeline_root=pipeline_root,
           tfx_image=self._config.tfx_image,
-          kubeflow_metadata_config=self._config.kubeflow_metadata_config)
+          kubeflow_metadata_config=self._config.kubeflow_metadata_config,
+          platform_config=platform_config)
 
       for operator in self._config.pipeline_operator_funcs:
         kfp_component.container_op.apply(operator)

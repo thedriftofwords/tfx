@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Text, cast
 from tfx import types
 from tfx.components.base import base_executor
 from tfx.components.base import executor_spec
+from tfx.orchestration.config import base_platform_config
 from tfx.orchestration.launcher import base_component_launcher
 
 
@@ -35,9 +36,13 @@ class InProcessComponentLauncher(base_component_launcher.BaseComponentLauncher):
   """
 
   @classmethod
-  def can_launch(cls,
-                 component_executor_spec: executor_spec.ExecutorSpec) -> bool:
+  def can_launch(
+      cls, component_executor_spec: executor_spec.ExecutorSpec,
+      platform_config: base_platform_config.BasePlatformConfig) -> bool:
     """Checks if the launcher can launch the executor spec."""
+    if platform_config:
+      return False
+
     return isinstance(component_executor_spec, executor_spec.ExecutorClassSpec)
 
   def _run_executor(self, execution_id: int,

@@ -135,7 +135,8 @@ class AirflowDagRunnerTest(tf.test.TestCase):
         components=[
             component_d, component_c, component_a, component_b, component_e
         ])
-    runner = airflow_dag_runner.AirflowDagRunner(config=airflow_config)
+    runner = airflow_dag_runner.AirflowDagRunner(
+        airflow_dag_config=airflow_config)
     runner.run(test_pipeline)
 
     mock_airflow_component_a.set_upstream.assert_not_called()

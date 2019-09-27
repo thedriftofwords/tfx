@@ -22,12 +22,13 @@ import os
 
 import apache_beam as beam
 import tensorflow as tf
-from typing import Any, Iterable, List, Optional, Text, Type
+from typing import Any, Dict, Iterable, List, Optional, Text, Type
 
 from tfx.components.base import base_component
 from tfx.orchestration import data_types
 from tfx.orchestration import pipeline
 from tfx.orchestration import tfx_runner
+from tfx.orchestration.config import base_platform_config
 from tfx.orchestration.launcher import base_component_launcher
 from tfx.orchestration.launcher import in_process_component_launcher
 
@@ -41,6 +42,7 @@ class _ComponentAsDoFn(beam.DoFn):
   def __init__(self, component: base_component.BaseComponent,
                component_launcher_class: Type[
                    base_component_launcher.BaseComponentLauncher],
+               platform_config: base_platform_config.BasePlatformConfig,
                tfx_pipeline: pipeline.Pipeline):
     """Initialize the _ComponentAsDoFn.
 
@@ -48,6 +50,7 @@ class _ComponentAsDoFn(beam.DoFn):
       component: Component that to be executed.
       component_launcher_class: The class of the launcher to launch the
         component.
+      platform_config: platform config to launch the component.
       tfx_pipeline: Logical pipeline that contains pipeline related information.
     """
     driver_args = data_types.DriverArgs(enable_cache=tfx_pipeline.enable_cache)
@@ -57,7 +60,8 @@ class _ComponentAsDoFn(beam.DoFn):
         driver_args=driver_args,
         metadata_connection_config=tfx_pipeline.metadata_connection_config,
         beam_pipeline_args=tfx_pipeline.beam_pipeline_args,
-        additional_pipeline_args=tfx_pipeline.additional_pipeline_args)
+        additional_pipeline_args=tfx_pipeline.additional_pipeline_args,
+        platform_config=platform_config)
     self._component_id = component.id
 
   def process(self, element: Any, *signals: Iterable[Any]) -> None:
@@ -88,15 +92,19 @@ class BeamDagRunner(tfx_runner.TfxRunner):
       in_process_component_launcher.InProcessComponentLauncher
   ]
 
-  def __init__(self, beam_orchestrator_args: Optional[List[Text]] = None):
+  def __init__(self,
+               beam_orchestrator_args: Optional[List[Text]] = None,
+               platform_configs: Dict[
+                   Text, List[base_platform_config.BasePlatformConfig]] = None):
     """Initializes BeamDagRunner as a TFX orchestrator.
 
     Args:
       beam_orchestrator_args: beam args for the beam orchestrator. Note that
         this is different from the beam_pipeline_args within
         additional_pipeline_args, which is for beam pipelines in components.
+      platform_configs: platform configs to launch components in a pipeline.
     """
-    super(BeamDagRunner, self).__init__()
+    super(BeamDagRunner, self).__init__(platform_configs)
     self._beam_orchestrator_args = beam_orchestrator_args
 
   def run(self, tfx_pipeline: pipeline.Pipeline) -> None:
@@ -132,7 +140,8 @@ class BeamDagRunner(tfx_runner.TfxRunner):
         tf.logging.info('Component %s depends on %s.', component_id,
                         [s.producer.full_label for s in signals_to_wait])
 
-        component_launcher_class = self.find_component_launcher_class(component)
+        (component_launcher_class,
+         platform_config) = self.find_component_launch_info(component)
 
         # Each signal is an empty PCollection. AsIter ensures component will be
         # triggered after upstream components are finished.
@@ -140,6 +149,6 @@ class BeamDagRunner(tfx_runner.TfxRunner):
             root
             | 'Run[%s]' % component_id >> beam.ParDo(
                 _ComponentAsDoFn(component, component_launcher_class,
-                                 tfx_pipeline),
+                                 platform_config, tfx_pipeline),
                 *[beam.pvalue.AsIter(s) for s in signals_to_wait]))
         tf.logging.info('Component %s is scheduled.', component_id)
