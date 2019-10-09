@@ -59,3 +59,11 @@ class Schema(artifact.Artifact):
 
 class TransformGraph(artifact.Artifact):
   TYPE_NAME = 'TransformPath'
+
+
+class TuningState(artifact.Artifact):
+  TYPE_NAME = 'TuningStatePath'
+
+
+class BestHParams(artifact.Artifact):
+  TYPE_NAME = 'StudyBestHParamsPath'
