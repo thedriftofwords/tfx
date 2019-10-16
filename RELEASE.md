@@ -42,6 +42,8 @@
     including Airflow and Beam.
 *   Added BulkInferrer component to TFX pipeline, and corresponding offline
     inference taxi pipeline.
+*   Added Kubeflow artifact visualization of inputs, outputs and
+    execution properties for components using a Markdown file.
 
 ## Bug fixes and other changes
 *   Bumped test dependency to kfp (Kubeflow Pipelines SDK) to

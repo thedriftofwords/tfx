@@ -22,14 +22,18 @@ import json
 import logging
 import os
 import sys
+import textwrap
 
 import absl
 from typing import List, Text
 
 from ml_metadata.proto import metadata_store_pb2
+from tfx.components.base import base_component
 from tfx.orchestration import data_types
 from tfx.orchestration.kubeflow.proto import kubeflow_pb2
 from tfx.orchestration.launcher import base_component_launcher
+from tfx.types import artifact
+from tfx.types import channel
 from tfx.utils import import_utils
 from tfx.utils import json_utils
 from google.protobuf import json_format
@@ -98,6 +102,139 @@ def _make_beam_pipeline_args(json_beam_pipeline_args: Text) -> List[Text]:
   return beam_pipeline_args
 
 
+def _render_channel_as_mdstr(input_channel: channel.Channel) -> Text:
+  """Render a Channel as markdown string with the following format.
+
+  **Type**: input_channel.type_name
+  **Artifact: artifact1**
+  **Properties**:
+  **key1**: value1
+  **key2**: value2
+  ......
+
+  Args:
+    input_channel: the channel to be rendered.
+
+  Returns:
+    a md-formatted string representation of the channel.
+  """
+
+  md_str = '**Type**: {}\n\n'.format(input_channel.type_name)
+  rendered_artifacts = []
+  # List all artifacts in the channel.
+  for single_artifact in input_channel.get():
+    rendered_artifacts.append(_render_artifact_as_mdstr(single_artifact))
+
+  return md_str + '\n\n'.join(rendered_artifacts)
+
+
+def _render_artifact_as_mdstr(single_artifact: artifact.Artifact) -> Text:
+  """Render an artifact as markdown string with the following format.
+
+  **Artifact: artifact1**
+  **Properties**:
+  **key1**: value1
+  **key2**: value2
+  ......
+
+  Args:
+    single_artifact: the artifact to be rendered.
+
+  Returns:
+    a md-formatted string representation of the artifact.
+  """
+  return textwrap.dedent("""\
+      **Artifact: {name}**
+
+      **Properties**:
+
+      **uri**: {uri},
+
+      **id**: {id},
+
+      **span**: {span},
+
+      **type_id**: {type_id},
+
+      **type_name**: {type_name},
+
+      **state**: {state},
+
+      **split**: {split},
+
+      **producer_component**: {producer_component}
+
+      """.format(
+          name=single_artifact.name or 'None',
+          uri=single_artifact.uri or 'None',
+          id=str(single_artifact.id),
+          span=single_artifact.span or 'None',
+          type_id=str(single_artifact.type_id),
+          type_name=single_artifact.type_name,
+          state=single_artifact.state or 'None',
+          split=single_artifact.split or 'None',
+          producer_component=single_artifact.producer_component or 'None'))
+
+
+def _dump_ui_metadata(component: base_component.BaseComponent,
+                      execution_decision: data_types.ExecutionDecision) -> None:
+  """Dump KFP UI metadata json file for visualization purpose.
+
+  For general components we just render a simple Markdown file for
+    exec_properties/inputs/outputs.
+
+  Args:
+    component: associated TFX component.
+    execution_decision: runtime execution decision for this component, including
+      materialized inputs.
+  """
+  exec_properties_list = [
+      '**{}**: {}'.format(name, exec_property)
+      for name, exec_property in component.exec_properties.items()
+  ]
+  src_str_exec_properties = '# Execution properties:\n{}'.format(
+      '\n\n'.join(exec_properties_list) or 'No execution property.')
+
+  inputs_list = []
+  for name, channel in component.inputs.get_all().items():  # pylint: disable=redefined-outer-name
+    # Need to look for materialized artifacts in the execution decision.
+    rendered_artifacts = ''.join([
+        _render_artifact_as_mdstr(single_artifact)
+        for single_artifact in execution_decision.input_dict[name]
+    ])
+    inputs_list.append(
+        '## {name}\n\n**Type**: {channel_type}\n\n{artifacts}'.format(
+            name=name,
+            channel_type=channel.type_name,
+            artifacts=rendered_artifacts))
+
+  src_str_inputs = '# Inputs:\n{}'.format(''.join(inputs_list) or 'No input.')
+
+  outputs_list = [
+      '## {}\n\n{}'.format(name, _render_channel_as_mdstr(channel))
+      for name, channel in component.outputs.get_all().items()  # pylint: disable=redefined-outer-name
+  ]
+  src_str_outputs = '# Outputs:\n{}'.format(''.join(outputs_list) or
+                                            'No output.')
+
+  metadata = {
+      'outputs': [{
+          'storage':
+              'inline',
+          'source':
+              '{exec_properties}\n{inputs}\n{outputs}'.format(
+                  exec_properties=src_str_exec_properties,
+                  inputs=src_str_inputs,
+                  outputs=src_str_outputs),
+          'type':
+              'markdown',
+      }]
+  }
+
+  with open('/mlpipeline-ui-metadata.json', 'w') as f:
+    json.dump(metadata, f)
+
+
 def main():
   # Log to the container's stdout so Kubeflow Pipelines UI can display logs to
   # the user.
@@ -146,7 +283,10 @@ def main():
       beam_pipeline_args=beam_pipeline_args,
       additional_pipeline_args=additional_pipeline_args)
 
-  launcher.launch()
+  execution_decision = launcher.launch()
+
+  # Dump the UI metadata.
+  _dump_ui_metadata(component, execution_decision)
 
 
 if __name__ == '__main__':
