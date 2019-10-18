@@ -36,6 +36,9 @@
     python components. This is specifically for the Kubeflow orchestration
     engine, which requires containers built with the custom python code.
 *   Added experimental support for TFMA fairness indicator thresholds.
+*   Added Kubeflow artifact visualization of inputs, outputs and
+    execution properties for components using a Markdown file.
+*   Added a Tensorboard visualization in Kubeflow artifact for Trainer component.
 
 ## Bug fixes and other changes
 *   Bumped test dependency to kfp (Kubeflow Pipelines SDK) to

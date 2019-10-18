@@ -27,9 +27,12 @@ import absl
 from typing import List, Text
 
 from ml_metadata.proto import metadata_store_pb2
+from tfx.components.base import base_component
+from tfx.components.trainer import component as trainer_component
 from tfx.orchestration import data_types
 from tfx.orchestration.kubeflow.proto import kubeflow_pb2
 from tfx.orchestration.launcher import base_component_launcher
+from tfx.types import channel
 from tfx.utils import import_utils
 from tfx.utils import json_utils
 from google.protobuf import json_format
@@ -98,6 +101,92 @@ def _make_beam_pipeline_args(json_beam_pipeline_args: Text) -> List[Text]:
   return beam_pipeline_args
 
 
+def _render_channel_as_mdstr(input_channel: channel.Channel) -> Text:
+  """Render a Channel as markdown string with the following format.
+
+  *Type*: input_channel.type_name
+  *Properties*:
+  *key1*: value1
+  *key2*: value2
+  ......
+
+  Args:
+    input_channel: the channel to be rendered.
+
+  Returns:
+    a md-formatted string representation of the channel.
+  """
+  md_str = '*Type*: {}\n\n*Properties*:\n\n'.format(input_channel.type_name)
+
+  # List all artifacts in the channel.
+  for artifact in input_channel.get():
+    md_str += '*Name*: {},\n\n'.format(artifact.name or 'None')
+    md_str += '*id*: {},\n\n'.format(str(artifact.id))
+    md_str += '*span*: {}\n\n'.format(artifact.span or 'None')
+    md_str += '*type_id*: {}\n\n'.format(str(artifact.type_id))
+    md_str += '*type_name*: {}\n\n'.format(artifact.type_name)
+    md_str += '*state*: {}\n\n'.format(artifact.state or 'None')
+    md_str += '*split*: {}\n\n'.format(artifact.split or 'None')
+    md_str += '*producer_component*: {}\n\n'.format(
+        artifact.producer_component or 'None')
+
+    return md_str
+
+
+def _dump_ui_metadata(component: base_component.BaseComponent) -> None:
+  """Dump KFP UI metadata json file for visualization purpose.
+
+  For general components we just render a simple Markdown file for
+    exec_properties/inputs/outputs.
+
+  Args:
+    component: associated TFX component.
+  """
+  src_str_exec_properties = '# Execution properties:\n'
+  exec_properties_list = [
+      '{}: {}'.format(name, exec_property)
+      for name, exec_property in component.exec_properties.items()
+  ]
+  src_str_exec_properties += '\n\n'.join(exec_properties_list)
+  src_str_exec_properties += '\n'
+
+  src_str_inputs = '# Inputs:\n'
+  for name, channel in component.inputs.get_all().items():  # pylint: disable=redefined-outer-name
+    str_input = '## {}\n\n'.format(name)
+    src_str_inputs += str_input + _render_channel_as_mdstr(channel)
+
+  src_str_outputs = '# Outputs:\n'
+  for name, channel in component.outputs.get_all().items():  # pylint: disable=redefined-outer-name
+    str_output = '## {}\n\n'.format(name)
+    src_str_outputs += str_output + _render_channel_as_mdstr(channel)
+
+  md_output = {
+      'storage': 'inline',
+      'source': src_str_exec_properties + src_str_inputs + src_str_outputs,
+      'type': 'markdown',
+  }
+
+  output = [md_output]
+
+  # Add Tensorboard view for Trainer.
+  # TODO(b/142804764): Visualization based on component type seems a bit of
+  # arbitrary. We need a better way to improve this.
+  if isinstance(component, trainer_component.Trainer):
+    output_model = component.outputs['model'].get()[0]
+
+    # Add Tensorboard view.
+    tensorboard_output = {
+        'type': 'tensorboard',
+        'source': output_model.uri
+    }
+    output.append(tensorboard_output)
+
+  metadata = {'outputs': output}
+
+  with open('/mlpipeline-ui-metadata.json', 'w') as f:
+    json.dump(metadata, f)
+
+
 def main():
   # Log to the container's stdout so Kubeflow Pipelines UI can display logs to
   # the user.
@@ -147,6 +236,9 @@ def main():
       additional_pipeline_args=additional_pipeline_args)
 
   launcher.launch()
+
+  # Dump the UI metadata.
+  _dump_ui_metadata(component)
 
 
 if __name__ == '__main__':
