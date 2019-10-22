@@ -42,6 +42,7 @@
     including Airflow and Beam.
 *   Added BulkInferrer component to TFX pipeline, and corresponding offline
     inference taxi pipeline.
+*   Added a BigQuery ML component for serving models on BigQuery ML.
 
 ## Bug fixes and other changes
 *   Bumped test dependency to kfp (Kubeflow Pipelines SDK) to
