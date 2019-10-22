@@ -26,6 +26,7 @@ import string
 import subprocess
 import tarfile
 import tempfile
+import time
 
 import absl
 import docker
@@ -134,6 +135,27 @@ def create_e2e_components(pipeline_root: Text, csv_input_location: Text,
   ]
 
 
+class _Timer(object):
+  """Helper class to time operations in Kubeflow e2e tests."""
+
+  def __init__(self, description: Text):
+    """Creates a context object to measure time taken.
+
+    Args:
+      description: A description of the operation being measured.
+    """
+    self._description = description
+
+  def __enter__(self):
+    self._start = time.time()
+
+  def __exit__(self, *unused_args):
+    self._end = time.time()
+
+    tf.logging.info('Timing Info\nOperation: %s\nElapsed time in seconds: %d' %
+                    (self._description, self._end - self._start))
+
+
 class BaseKubeflowTest(tf.test.TestCase):
   """Base class that defines testing harness for pipeline on KubeflowRunner."""
 
@@ -164,17 +186,20 @@ class BaseKubeflowTest(tf.test.TestCase):
     repo_base = os.environ['KFP_E2E_SRC']
 
     absl.logging.info('Building image {}'.format(container_image))
-    _ = client.images.build(
-        path=repo_base,
-        dockerfile='tfx/tools/docker/Dockerfile',
-        tag=container_image,
-        buildargs={
-            # Skip license gathering for tests.
-            'gather_third_party_licenses': 'false',
-        },
-    )
+    with _Timer('Building TFX container image'):
+      _ = client.images.build(
+          path=repo_base,
+          dockerfile='tfx/tools/docker/Dockerfile',
+          tag=container_image,
+          buildargs={
+              # Skip license gathering for tests.
+              'gather_third_party_licenses': 'false',
+          },
+      )
+
     absl.logging.info('Pushing image {}'.format(container_image))
-    client.images.push(repository=container_image)
+    with _Timer('Pushing TFX container image'):
+      client.images.push(repository=container_image)
 
   @classmethod
   def _get_mysql_pod_name(cls):
@@ -259,7 +284,8 @@ class BaseKubeflowTest(tf.test.TestCase):
         workflow_file,
     ]
     absl.logging.info('Launching workflow {}'.format(workflow_name))
-    subprocess.run(run_command, check=True)
+    with _Timer('Running pipeline to completion'):
+      subprocess.run(run_command, check=True)
 
   def _delete_pipeline_output(self, pipeline_name: Text):
     """Deletes output produced by the named pipeline.
@@ -272,8 +298,10 @@ class BaseKubeflowTest(tf.test.TestCase):
     prefix = 'test_output/{}'.format(pipeline_name)
     absl.logging.info(
         'Deleting output under GCS bucket prefix: {}'.format(prefix))
-    blobs = bucket.list_blobs(prefix=prefix)
-    bucket.delete_blobs(blobs)
+
+    with _Timer('Listing & Deleting artifacts from GCS'):
+      blobs = bucket.list_blobs(prefix=prefix)
+      bucket.delete_blobs(blobs)
 
   def _delete_pipeline_metadata(self, pipeline_name: Text):
     """Drops the database containing metadata produced by the pipeline.
@@ -299,7 +327,9 @@ class BaseKubeflowTest(tf.test.TestCase):
         'drop database {};'.format(db_name),
     ]
     absl.logging.info('Dropping MLMD DB with name: {}'.format(db_name))
-    subprocess.run(command, check=True)
+
+    with _Timer('Deleting MLMD database'):
+      subprocess.run(command, check=True)
 
   def _pipeline_root(self, pipeline_name: Text):
     return os.path.join(self._test_output_dir, pipeline_name)
