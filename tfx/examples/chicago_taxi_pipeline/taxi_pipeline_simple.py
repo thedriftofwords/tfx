@@ -18,9 +18,7 @@ from __future__ import division
 from __future__ import print_function
 
 import datetime
-import multiprocessing
 import os
-import absl
 from typing import Text
 from tfx.components.evaluator.component import Evaluator
 from tfx.components.example_gen.csv_example_gen.component import CsvExampleGen
@@ -143,13 +141,6 @@ def _create_pipeline(pipeline_name: Text, pipeline_root: Text, data_root: Text,
       beam_pipeline_args=['--direct_num_workers=%d' % direct_num_workers])
 
 
-try:
-  parallelism = multiprocessing.cpu_count()
-except NotImplementedError:
-  parallelism = 1
-absl.logging.info('Using %d process(es) for Beam pipeline execution.' %
-                  parallelism)
-
 # 'DAG' below need to be kept for Airflow to detect dag.
 DAG = AirflowDagRunner(_airflow_config).run(
     _create_pipeline(
@@ -159,4 +150,5 @@ DAG = AirflowDagRunner(_airflow_config).run(
         module_file=_module_file,
         serving_model_dir=_serving_model_dir,
         metadata_path=_metadata_path,
-        direct_num_workers=parallelism))
+        # 0 means auto-detect based on cores.
+        direct_num_workers=0))
