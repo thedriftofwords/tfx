@@ -65,7 +65,7 @@
     upgrading procedure.
 *   TFX updated to use `tf.compat.v1` according to the TF 2.0 upgrading
     procedure.
-*   Added Kubeflow simple example that executes all components in-cluster.
+*   Added Kubeflow local example pipeline that executes components in-cluster.
 *   Depends on 'tfx_bsl>=0.15.1,<0.16'
 *   Fixed a bug that prevents updating execution type.
 

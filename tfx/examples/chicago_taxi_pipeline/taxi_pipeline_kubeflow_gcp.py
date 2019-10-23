@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Chicago Taxi example using TFX DSL on Kubeflow."""
+"""Chicago Taxi example using TFX DSL on Kubeflow with Google Cloud services."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -36,7 +36,7 @@ from tfx.orchestration.kubeflow import kubeflow_dag_runner
 from tfx.proto import evaluator_pb2
 from tfx.proto import trainer_pb2
 
-_pipeline_name = 'chicago_taxi_pipeline_kubeflow'
+_pipeline_name = 'chicago_taxi_pipeline_kubeflow_gcp'
 
 # Directory and data locations (uses Google Cloud Storage).
 _input_bucket = 'gs://my-bucket'
